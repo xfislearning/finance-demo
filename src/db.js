@@ -100,7 +100,7 @@ async function seedDemo(db){
  await db.execute("INSERT INTO payments (id,invoice_id,customer_id,payment_date,amount_cents,account_id,reference,notes,created_at) VALUES ('pay1','inv1','cust1','2026-08-30',180000,'acct1','DEMO-PAY','Demo payment',?)",[now]);
  await db.execute("INSERT INTO bank_imports (id,account_id,file_name,imported_at,row_count) VALUES ('bi1','acct1','demo-bank.csv',?,5)",[now]);
  const bt=[["b1","2026-08-05","OFFICE DEPOT #128",-8642,1],["b2","2026-08-12","ZIGGIS COFFEE",-1875,1],["b3","2026-08-25","BANK ACCOUNT BONUS",40000,0],["b4","2026-08-28","DOWNTOWN PARKING",-1400,0],["b5","2026-08-30","FRONT RANGE DESIGN",180000,0]];
- for(const b of bt) await db.execute("INSERT INTO bank_transactions (id,import_id,account_id,bank_date,description,amount_cents,reconciled,created_at,categorization_status) VALUES (?,'bi1','acct1',?,?,?,?,? )",[b[0],b[1],b[2],b[3],b[4],now,b[4]?"reconciled":"Needs Review"]);
+ for(const b of bt) await db.execute("INSERT INTO bank_transactions (id,import_id,account_id,bank_date,description,amount_cents,reconciled,created_at,categorization_status) VALUES (?,'bi1','acct1',?,?,?,?,?,?)",[b[0],b[1],b[2],b[3],b[4],now,b[4]?"reconciled":"Needs Review"]);
 }
 
 export async function select(sql,params=[]){const db=await getDb();return db.select(sql,params)}
