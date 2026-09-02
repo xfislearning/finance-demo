@@ -1,4 +1,5 @@
 import initSqlJs from "sql.js";
+import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import { uuid } from "./utils";
 
 const DB_KEY = "qentro_finance_demo_sqlite_v051";
@@ -26,7 +27,7 @@ export function resetDemoDatabase(){ localStorage.removeItem(DB_KEY); location.r
 
 export function getDb() {
   if (!dbPromise) dbPromise=(async()=>{
-    const SQL=await initSqlJs({locateFile:file=>`https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/${file}`});
+    const SQL=await initSqlJs({ locateFile: () => sqlWasmUrl });
     const saved=localStorage.getItem(DB_KEY);
     const raw=saved?new SQL.Database(fromBase64(saved)):new SQL.Database();
     const db={
