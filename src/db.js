@@ -2,7 +2,7 @@ import initSqlJs from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import { uuid } from "./utils";
 
-const DB_KEY = "qentro_finance_demo_sqlite_v051";
+const DB_KEY = "qentro_finance_demo_sqlite_v051_reports_v2";
 let dbPromise;
 let writeQueue = Promise.resolve();
 
@@ -57,10 +57,10 @@ async function initialize(db){
 `CREATE TABLE IF NOT EXISTS mileage_rates (id TEXT PRIMARY KEY,effective_from TEXT NOT NULL,effective_to TEXT,rate_mills_per_mile INTEGER NOT NULL,label TEXT,created_at TEXT NOT NULL)`,
 `CREATE TABLE IF NOT EXISTS bank_imports (id TEXT PRIMARY KEY,account_id TEXT NOT NULL,file_name TEXT,imported_at TEXT NOT NULL,row_count INTEGER NOT NULL DEFAULT 0)`,
 `CREATE TABLE IF NOT EXISTS bank_transactions (id TEXT PRIMARY KEY,import_id TEXT NOT NULL,account_id TEXT NOT NULL,bank_date TEXT NOT NULL,description TEXT NOT NULL,amount_cents INTEGER NOT NULL,external_id TEXT,raw_json TEXT,reconciled INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,normalized_merchant TEXT,suggested_category TEXT,suggested_category_id TEXT,categorization_status TEXT,categorization_confidence REAL,categorization_note TEXT)`,
-`CREATE TABLE IF NOT EXISTS reconciliations (id TEXT PRIMARY KEY,bank_transaction_id TEXT NOT NULL UNIQUE,target_type TEXT NOT NULL,target_id TEXT,matched_at TEXT NOT NULL,notes TEXT)`,
-`CREATE TABLE IF NOT EXISTS accounting_entries (id TEXT PRIMARY KEY,entry_date TEXT NOT NULL,entry_type TEXT NOT NULL,amount_cents INTEGER NOT NULL,account_name TEXT,description TEXT,notes TEXT,created_at TEXT NOT NULL,source_type TEXT,source_id TEXT)`,
-`CREATE TABLE IF NOT EXISTS journal_entries (id TEXT PRIMARY KEY,entry_date TEXT NOT NULL,description TEXT,source_type TEXT,source_id TEXT,created_at TEXT NOT NULL)`,
-`CREATE TABLE IF NOT EXISTS journal_lines (id TEXT PRIMARY KEY,journal_entry_id TEXT NOT NULL,account_code TEXT,account_name TEXT,debit_cents INTEGER NOT NULL DEFAULT 0,credit_cents INTEGER NOT NULL DEFAULT 0)`
+`CREATE TABLE IF NOT EXISTS reconciliations (id TEXT PRIMARY KEY,bank_transaction_id TEXT NOT NULL UNIQUE,target_type TEXT NOT NULL,target_id TEXT,reconciled_at TEXT NOT NULL,note TEXT)`,
+`CREATE TABLE IF NOT EXISTS accounting_entries (id TEXT PRIMARY KEY,entry_date TEXT NOT NULL,entry_type TEXT NOT NULL,amount_cents INTEGER NOT NULL,account_id TEXT,reference_name TEXT,description TEXT NOT NULL,notes TEXT,created_at TEXT NOT NULL,source_type TEXT,source_id TEXT)`,
+`CREATE TABLE IF NOT EXISTS journal_entries (id TEXT PRIMARY KEY,entry_date TEXT NOT NULL,description TEXT,source_type TEXT,source_id TEXT,status TEXT NOT NULL DEFAULT 'posted',posted_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+`CREATE TABLE IF NOT EXISTS journal_lines (id TEXT PRIMARY KEY,journal_entry_id TEXT NOT NULL,account_code TEXT,account_name TEXT,debit_cents INTEGER NOT NULL DEFAULT 0,credit_cents INTEGER NOT NULL DEFAULT 0,sort_order INTEGER NOT NULL DEFAULT 0)`
  ];
  for(const q of ddl) await db.execute(q);
  const cats=["Coffee / Business Meetings","Business Meals / Lunch","Parking","Tolls","Gas / Fuel","Airfare","Hotel / Lodging","Ground Transportation","Software & Subscriptions","Web, Cloud & Hosting","Computer & Hardware Expense","Computer Equipment","AI / GPU Equipment","Office Equipment","Hardware Upgrades / Components","Advertising & Marketing","Business Cards","Flyers & Brochures","Website / SEO","Office Supplies","Dues & Memberships","Professional Services","Contractors","Insurance","Phone & Internet","Education & Training","Bank & Payment Fees","Taxes & Licenses","Fines & Penalties - Non-deductible","Uncategorized / Needs Review","Bank & Merchant Fees","Chamber / Memberships","Equipment","Legal & Professional","Meals","Software / AI / SaaS","Travel","Utilities / Communications","Other"];
@@ -98,6 +98,11 @@ async function seedDemo(db){
  const items=[["ii1","inv1","AI workflow assessment",1,180000],["ii2","inv2","Private AI discovery workshop",1,250000],["ii3","inv3","Automation pilot",1,320000]];
  for(const i of items) await db.execute("INSERT INTO invoice_items (id,invoice_id,description,quantity,rate_cents,amount_cents,sort_order) VALUES (?,?,?,?,?,?,0)",[i[0],i[1],i[2],i[3],i[4],i[4]]);
  await db.execute("INSERT INTO payments (id,invoice_id,customer_id,payment_date,amount_cents,account_id,reference,notes,created_at) VALUES ('pay1','inv1','cust1','2026-08-30',180000,'acct1','DEMO-PAY','Demo payment',?)",[now]);
+ // Seed accounting activity so all four financial reports have meaningful, balanced demo data.
+ await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-owner','2026-06-15','owner_contribution',500000,'acct1','Owner Contribution','Initial owner funding','Demo balance-sheet activity',?,'demo','owner')`,[now]);
+ await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-asset','2026-07-02','asset_purchase',120000,'acct1','Computer Equipment','Business computer equipment','Demo fixed asset purchase',?,'demo','asset')`,[now]);
+ await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-bonus','2026-08-25','other_income',40000,'acct1','Bank Bonus / Interest Income','Bank account bonus','Demo other income',?,'demo','bonus')`,[now]);
+
  await db.execute("INSERT INTO bank_imports (id,account_id,file_name,imported_at,row_count) VALUES ('bi1','acct1','demo-bank.csv',?,5)",[now]);
  const bt=[["b1","2026-08-05","OFFICE DEPOT #128",-8642,1],["b2","2026-08-12","ZIGGIS COFFEE",-1875,1],["b3","2026-08-25","BANK ACCOUNT BONUS",40000,0],["b4","2026-08-28","DOWNTOWN PARKING",-1400,0],["b5","2026-08-30","FRONT RANGE DESIGN",180000,0]];
  for(const b of bt) await db.execute("INSERT INTO bank_transactions (id,import_id,account_id,bank_date,description,amount_cents,reconciled,created_at,categorization_status) VALUES (?,'bi1','acct1',?,?,?,?,?,?)",[b[0],b[1],b[2],b[3],b[4],now,b[4]?"reconciled":"Needs Review"]);
