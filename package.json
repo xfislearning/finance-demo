@@ -1,20 +1,28 @@
 {
-  "name": "qentro-finance-demo",
+  "name": "qentro-finance-web-demo",
   "private": true,
-  "version": "0.1.0-demo",
+  "version": "0.5.1-demo",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "desktop": "tauri dev",
+    "installer": "tauri build"
   },
   "dependencies": {
-    "lucide-react": "^0.468.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "jspdf": "^3.0.0",
+    "papaparse": "^5.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0",
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.1",
-    "vite": "^7.1.3"
+    "@tauri-apps/cli": "^2.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^7.0.0"
   }
 }
