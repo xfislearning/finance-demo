@@ -8,7 +8,7 @@ export async function getCurrentSession() {
 
 export async function getWorkspaceForUser() {
   if (!supabaseConfigured) return null;
-  const rows = await restSelect('organization_members?select=organization_id,role,organizations(id,company_name,country_code)&limit=1');
+  const rows = await restSelect('organization_members?select=organization_id,role,organizations(id,company_name,country_code,timezone)&limit=1');
   const data = rows?.[0];
   if (!data) return null;
   const org = data.organizations;
@@ -16,7 +16,8 @@ export async function getWorkspaceForUser() {
     organizationId: data.organization_id,
     role: data.role,
     companyName: org?.company_name || 'My Company',
-    country: org?.country_code || 'US'
+    country: org?.country_code || 'US',
+    timezone: org?.timezone || 'UTC'
   };
 }
 
@@ -38,6 +39,7 @@ export async function createWorkspaceAccount(form) {
     email: form.email,
     password: form.password,
     country_code: form.country,
+    timezone: form.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     challenge_id: form.challengeId,
     challenge_answer: form.challengeAnswer,
     website: form.website || ""

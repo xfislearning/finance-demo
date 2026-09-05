@@ -141,7 +141,7 @@ function App() {
 
 function AuthModal({ view, onClose, onSwitch, onSignedIn }) {
   const signup = view === "signup";
-  const [form, setForm] = useState({ firstName:"", lastName:"", companyName:"", email:"", password:"", country:"US", challengeId:"", challengeAnswer:"", website:"" });
+  const [form, setForm] = useState({ firstName:"", lastName:"", companyName:"", email:"", password:"", country:"US", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", challengeId:"", challengeAnswer:"", website:"" });
   const [question, setQuestion] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
