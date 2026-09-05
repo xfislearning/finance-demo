@@ -1,0 +1,2 @@
+[functions.account-signup]
+verify_jwt = false
