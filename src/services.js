@@ -670,6 +670,16 @@ function reportBounds(period = monthKey()) {
     const value = period?.value || monthKey();
     return { ...monthBounds(value), mode, value };
   }
+  if (mode === "quarter") {
+    const qv = period?.value || {};
+    const year = String(qv.year || currentYear);
+    const quarter = Math.min(4, Math.max(1, Number(qv.quarter || (Math.floor((Number(currentDate.slice(5,7))-1)/3)+1))));
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = startMonth + 3;
+    const start = `${year}-${String(startMonth).padStart(2, "0")}-01`;
+    const end = endMonth === 13 ? `${Number(year) + 1}-01-01` : `${year}-${String(endMonth).padStart(2, "0")}-01`;
+    return { start, end, mode, value: { year, quarter } };
+  }
   if (mode === "year") {
     const value = String(period?.value || currentYear);
     return { start: `${value}-01-01`, end: `${Number(value) + 1}-01-01`, mode, value };

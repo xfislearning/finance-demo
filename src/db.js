@@ -2,7 +2,7 @@ import initSqlJs from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import { uuid } from "./utils";
 
-const DB_KEY = "qentro_finance_demo_sqlite_v051_reports_v2";
+const DB_KEY = "qentro_finance_demo_sqlite_v083_sanitized";
 let dbPromise;
 let writeQueue = Promise.resolve();
 let workspaceContext = { mode: "demo", organizationId: null, companyName: "Qentro Demo LLC", country: "US" };
@@ -100,46 +100,44 @@ async function initialize(db){
  for(const q of ddl) await db.execute(q);
  const cats=["Coffee / Business Meetings","Business Meals / Lunch","Parking","Tolls","Gas / Fuel","Airfare","Hotel / Lodging","Ground Transportation","Software & Subscriptions","Web, Cloud & Hosting","Computer & Hardware Expense","Computer Equipment","AI / GPU Equipment","Office Equipment","Hardware Upgrades / Components","Advertising & Marketing","Business Cards","Flyers & Brochures","Website / SEO","Office Supplies","Dues & Memberships","Professional Services","Contractors","Insurance","Phone & Internet","Education & Training","Bank & Payment Fees","Taxes & Licenses","Fines & Penalties - Non-deductible","Uncategorized / Needs Review","Bank & Merchant Fees","Chamber / Memberships","Equipment","Legal & Professional","Meals","Software / AI / SaaS","Travel","Utilities / Communications","Other"];
  for(const name of cats) await db.execute("INSERT OR IGNORE INTO expense_categories (id,name,active) VALUES (?,?,1)",[uuid(),name]);
- const defs={company_name:"Qentro Demo LLC",company_email:"demo@qentrotech.com",company_phone:"(555) 010-2026",company_address:"Colorado",company_website:"qentrotech.com",invoice_prefix:"QEN",next_invoice_number:"1007",mileage_rate_cents:"70",payment_instructions:"Demo payment instructions — sample data only."};
+ const defs={company_name:"Demo Business LLC",company_email:"demo@example.com",company_phone:"(555) 010-2000",company_address:"100 Example Avenue, Demo City, CO 80000",company_website:"example.com",invoice_prefix:"DEM",next_invoice_number:"1004",mileage_rate_cents:"70",payment_instructions:"Demo payment instructions — fictional sample data only."};
  for(const [k,v] of Object.entries(defs)) await db.execute("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)",[k,v]);
 }
 
 async function seedDemo(db){
  const now=new Date().toISOString();
  const customers=[
-  ["cust1","Front Range Design","Alex Morgan","alex@example.com","555-0101","Longmont, CO","Demo customer"],
-  ["cust2","Mountain Peak Dental","Jamie Lee","jamie@example.com","555-0102","Boulder, CO","Demo customer"],
-  ["cust3","Acme Operations","Taylor Smith","taylor@example.com","555-0103","Denver, CO","Demo customer"]
+  ["cust1","Example Design Studio","Alex Morgan","alex@example.com","555-0101","200 Example Street, Demo City, CO 80000","Fictional demo customer"],
+  ["cust2","Sample Dental Group","Jamie Lee","jamie@example.com","555-0102","300 Sample Road, Demo City, CO 80000","Fictional demo customer"],
+  ["cust3","Demo Operations Inc.","Taylor Smith","taylor@example.com","555-0103","400 Test Boulevard, Demo City, CO 80000","Fictional demo customer"]
  ];
  for(const c of customers) await db.execute("INSERT INTO customers (id,name,contact_name,email,phone,billing_address,notes,active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,1,?,?)",[...c,now,now]);
- await db.execute("INSERT INTO accounts (id,name,account_type,institution,last4,active,created_at) VALUES ('acct1','Business Checking','checking','Demo Bank','1234',1,?)",[now]);
- await db.execute("INSERT INTO accounts (id,name,account_type,institution,last4,active,created_at) VALUES ('acct2','Business Credit Card','credit_card','Demo Bank','5678',1,?)",[now]);
+ await db.execute("INSERT INTO accounts (id,name,account_type,institution,last4,active,created_at) VALUES ('acct1','Business Checking','checking','Example Bank','1234',1,?)",[now]);
+ await db.execute("INSERT INTO accounts (id,name,account_type,institution,last4,active,created_at) VALUES ('acct2','Business Credit Card','credit_card','Example Bank','5678',1,?)",[now]);
  const catRows=await db.select("SELECT id,name FROM expense_categories"); const cat=Object.fromEntries(catRows.map(x=>[x.name,x.id]));
  const ex=[
- ["e1","2026-08-05","Office Depot","Printer supplies",8642,"Office Supplies","acct2","Business Credit Card","cust1"],
- ["e2","2026-08-12","Ziggi's Coffee","Client discovery meeting",1875,"Coffee / Business Meetings","acct2","Business Credit Card","cust2"],
- ["e3","2026-08-19","Namecheap","Domain and web services",2398,"Web, Cloud & Hosting","acct1","Business Checking",null],
- ["e4","2026-08-23","FedEx Office","Marketing handouts",6430,"Advertising & Marketing","acct2","Business Credit Card",null],
- ["e5","2026-08-28","Downtown Parking","Networking event parking",1400,"Parking","acct2","Business Credit Card",null],
- ["e6","2026-07-10","Longmont Chamber","Annual membership",45000,"Dues & Memberships","acct1","Business Checking",null],
- ["e7","2026-06-18","Software Vendor","AI software subscription",9900,"Software & Subscriptions","acct2","Business Credit Card",null]
+ ["e1","2026-08-05","Demo Office Supply","Printer supplies",8642,"Office Supplies","acct2","Business Credit Card","cust1"],
+ ["e2","2026-08-12","Demo Coffee Shop","Customer meeting",1875,"Coffee / Business Meetings","acct2","Business Credit Card","cust2"],
+ ["e3","2026-08-19","Demo Hosting Co.","Website hosting",2398,"Web, Cloud & Hosting","acct1","Business Checking",null],
+ ["e4","2026-08-23","Demo Print Shop","Marketing handouts",6430,"Advertising & Marketing","acct2","Business Credit Card",null],
+ ["e5","2026-08-28","Demo Parking Garage","Business event parking",1400,"Parking","acct2","Business Credit Card",null],
+ ["e6","2026-07-10","Demo Business Association","Annual membership",45000,"Dues & Memberships","acct1","Business Checking",null],
+ ["e7","2026-06-18","Demo Software Co.","Software subscription",9900,"Software & Subscriptions","acct2","Business Credit Card",null]
  ];
- for(const x of ex) await db.execute(`INSERT INTO expenses (id,expense_date,vendor,description,amount_cents,category_id,payment_source,account_id,business_purpose,customer_id,project_id,receipt_path,notes,created_at,updated_at,paid_from,source,reconciliation_status) VALUES (?,?,?,?,?,?,'business',?, '',?,NULL,NULL,'Demo expense',?,?,?,'manual','reconciled')`,[x[0],x[1],x[2],x[3],x[4],cat[x[5]],x[6],x[8],now,now,x[7]]);
+ for(const x of ex) await db.execute(`INSERT INTO expenses (id,expense_date,vendor,description,amount_cents,category_id,payment_source,account_id,business_purpose,customer_id,project_id,receipt_path,notes,created_at,updated_at,paid_from,source,reconciliation_status) VALUES (?,?,?,?,?,?,'business',?, '',?,NULL,NULL,'Fictional demo expense',?,?,?,'manual','reconciled')`,[x[0],x[1],x[2],x[3],x[4],cat[x[5]],x[6],x[8],now,now,x[7]]);
  await db.execute("INSERT INTO mileage_rates (id,effective_from,effective_to,rate_mills_per_mile,label,created_at) VALUES ('rate1','2026-01-01',NULL,700,'2026 Demo Rate',?)",[now]);
- const miles=[["m1","2026-08-07","Berthoud","Longmont","Client discovery meeting",1,24.6,"cust1"],["m2","2026-08-14","Berthoud","Denver","Chamber networking",1,92.4,null],["m3","2026-08-26","Berthoud","Boulder","Coffee meeting",1,60.2,"cust2"]];
- for(const m of miles) await db.execute(`INSERT INTO mileage_entries (id,trip_date,start_location,destination,business_purpose,round_trip,miles,rate_cents_per_mile,deduction_cents,customer_id,notes,created_at,source,review_status,rate_mills_per_mile) VALUES (?,?,?,?,?,?,?,70,?,?, 'Demo mileage',?,'manual','reviewed',700)`,[m[0],m[1],m[2],m[3],m[4],m[5],m[6],Math.round(m[6]*70),m[7],now]);
- const inv=[["inv1","QEN-1004","cust1","2026-08-22","2026-09-21","Paid"],["inv2","QEN-1005","cust2","2026-08-29","2026-09-28","Sent"],["inv3","QEN-1006","cust3","2026-09-01","2026-10-01","Draft"]];
- for(const i of inv) await db.execute("INSERT INTO invoices (id,invoice_number,customer_id,invoice_date,due_date,status,notes,payment_instructions,taxable,tax_rate,tax_cents,created_at,updated_at) VALUES (?,?,?,?,?,?, 'Demo invoice','Demo only',0,0,0,?,?)",[...i,now,now]);
- const items=[["ii1","inv1","AI workflow assessment",1,180000],["ii2","inv2","Private AI discovery workshop",1,250000],["ii3","inv3","Automation pilot",1,320000]];
+ const miles=[["m1","2026-08-07","100 Example Ave","200 Sample St","Customer meeting",1,24.6,"cust1"],["m2","2026-08-14","100 Example Ave","500 Test Rd","Business event",1,92.4,null],["m3","2026-08-26","100 Example Ave","300 Sample Rd","Customer meeting",1,60.2,"cust2"]];
+ for(const m of miles) await db.execute(`INSERT INTO mileage_entries (id,trip_date,start_location,destination,business_purpose,round_trip,miles,rate_cents_per_mile,deduction_cents,customer_id,notes,created_at,source,review_status,rate_mills_per_mile) VALUES (?,?,?,?,?,?,?,70,?,?, 'Fictional demo mileage',?,'manual','reviewed',700)`,[m[0],m[1],m[2],m[3],m[4],m[5],m[6],Math.round(m[6]*70),m[7],now]);
+ const inv=[["inv1","DEM-1001","cust1","2026-08-22","2026-09-21","Paid"],["inv2","DEM-1002","cust2","2026-08-29","2026-09-28","Sent"],["inv3","DEM-1003","cust3","2026-09-01","2026-10-01","Draft"]];
+ for(const i of inv) await db.execute("INSERT INTO invoices (id,invoice_number,customer_id,invoice_date,due_date,status,notes,payment_instructions,taxable,tax_rate,tax_cents,created_at,updated_at) VALUES (?,?,?,?,?,?, 'Fictional demo invoice','Demo only',0,0,0,?,?)",[...i,now,now]);
+ const items=[["ii1","inv1","Consulting service",1,180000],["ii2","inv2","Operations workshop",1,250000],["ii3","inv3","Automation setup",1,320000]];
  for(const i of items) await db.execute("INSERT INTO invoice_items (id,invoice_id,description,quantity,rate_cents,amount_cents,sort_order) VALUES (?,?,?,?,?,?,0)",[i[0],i[1],i[2],i[3],i[4],i[4]]);
- await db.execute("INSERT INTO payments (id,invoice_id,customer_id,payment_date,amount_cents,account_id,reference,notes,created_at) VALUES ('pay1','inv1','cust1','2026-08-30',180000,'acct1','DEMO-PAY','Demo payment',?)",[now]);
- // Seed accounting activity so all four financial reports have meaningful, balanced demo data.
- await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-owner','2026-06-15','owner_contribution',500000,'acct1','Owner Contribution','Initial owner funding','Demo balance-sheet activity',?,'demo','owner')`,[now]);
- await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-asset','2026-07-02','asset_purchase',120000,'acct1','Computer Equipment','Business computer equipment','Demo fixed asset purchase',?,'demo','asset')`,[now]);
- await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-bonus','2026-08-25','other_income',40000,'acct1','Bank Bonus / Interest Income','Bank account bonus','Demo other income',?,'demo','bonus')`,[now]);
-
- await db.execute("INSERT INTO bank_imports (id,account_id,file_name,imported_at,row_count) VALUES ('bi1','acct1','demo-bank.csv',?,5)",[now]);
- const bt=[["b1","2026-08-05","OFFICE DEPOT #128",-8642,1],["b2","2026-08-12","ZIGGIS COFFEE",-1875,1],["b3","2026-08-25","BANK ACCOUNT BONUS",40000,0],["b4","2026-08-28","DOWNTOWN PARKING",-1400,0],["b5","2026-08-30","FRONT RANGE DESIGN",180000,0]];
+ await db.execute("INSERT INTO payments (id,invoice_id,customer_id,payment_date,amount_cents,account_id,reference,notes,created_at) VALUES ('pay1','inv1','cust1','2026-08-30',180000,'acct1','DEMO-PAY','Fictional demo payment',?)",[now]);
+ await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-owner','2026-06-15','owner_contribution',500000,'acct1','Owner Contribution','Initial demo funding','Fictional demo balance-sheet activity',?,'demo','owner')`,[now]);
+ await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-asset','2026-07-02','asset_purchase',120000,'acct1','Computer Equipment','Demo computer equipment','Fictional demo fixed asset purchase',?,'demo','asset')`,[now]);
+ await db.execute(`INSERT INTO accounting_entries (id,entry_date,entry_type,amount_cents,account_id,reference_name,description,notes,created_at,source_type,source_id) VALUES ('ae-bonus','2026-08-25','other_income',40000,'acct1','Bank Bonus / Interest Income','Demo bank account bonus','Fictional demo other income',?,'demo','bonus')`,[now]);
+ await db.execute("INSERT INTO bank_imports (id,account_id,file_name,imported_at,row_count) VALUES ('bi1','acct1','fictional-demo-bank.csv',?,5)",[now]);
+ const bt=[["b1","2026-08-05","DEMO OFFICE SUPPLY",-8642,1],["b2","2026-08-12","DEMO COFFEE SHOP",-1875,1],["b3","2026-08-25","DEMO BANK BONUS",40000,0],["b4","2026-08-28","DEMO PARKING GARAGE",-1400,0],["b5","2026-08-30","EXAMPLE DESIGN STUDIO",180000,0]];
  for(const b of bt) await db.execute("INSERT INTO bank_transactions (id,import_id,account_id,bank_date,description,amount_cents,reconciled,created_at,categorization_status) VALUES (?,'bi1','acct1',?,?,?,?,?,?)",[b[0],b[1],b[2],b[3],b[4],now,b[4]?"reconciled":"Needs Review"]);
 }
 

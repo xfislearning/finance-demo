@@ -73,7 +73,7 @@ import {
 import qentroLogo from "./assets/qentro-icon.png";
 import packageInfo from "../package.json";
 import { configureDatabaseWorkspace } from "./db";
-import { getCurrentSession, getWorkspaceForUser, signIn, signOut, getCaptchaChallenge, createWorkspaceAccount } from "./auth";
+import { getCurrentSession, getWorkspaceForUser, signIn, signOut, getCaptchaChallenge, createWorkspaceAccount, sendPasswordReset, changePassword, detectRecoverySession } from "./auth";
 import { supabaseConfigured, SUPPORT_EMAIL } from "./supabaseClient";
 import PrivateWorkspace from "./PrivateWorkspace";
 
@@ -95,14 +95,17 @@ function App() {
   const [session, setSession] = useState(null);
   const [workspace, setWorkspace] = useState(null);
   const [authView, setAuthView] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   async function initializeApp() {
     try {
       setReady(false); setError("");
+      if (detectRecoverySession()) setAuthView("reset");
       const currentSession = await getCurrentSession();
       if (currentSession) {
         const ws = await getWorkspaceForUser();
-        if (!ws) throw new Error("Your account exists, but no finance workspace was found. Contact support.");
+        if (!ws && authView !== "reset") throw new Error("Your account exists, but no finance workspace was found. Contact support.");
         setSession(currentSession); setWorkspace(ws);
       } else {
         configureDatabaseWorkspace({ mode: "demo", organizationId: null, companyName: "Qentro Demo LLC", country: "US" });
@@ -114,24 +117,31 @@ function App() {
   }
 
   useEffect(() => { void initializeApp(); }, []);
+  useEffect(() => {
+    function esc(e){ if(e.key==='Escape'){setMobileMenuOpen(false);setUserMenuOpen(false);} }
+    document.addEventListener('keydown',esc); return()=>document.removeEventListener('keydown',esc);
+  },[]);
   async function handleSignedIn() { setAuthView(""); await initializeApp(); setPage("Dashboard"); }
-  async function handleSignOut() { await signOut(); setAuthView(""); await initializeApp(); setPage("Dashboard"); }
+  async function handleSignOut() { await signOut(); setAuthView(""); setUserMenuOpen(false); await initializeApp(); setPage("Dashboard"); }
+  function choosePage(n){setPage(n);setMobileMenuOpen(false);setUserMenuOpen(false)}
 
   if (!ready) return <div className="loading">Opening Qentro Finance…</div>;
   if (error) return <div className="fatal"><h2>Qentro Finance could not start</h2><pre>{error}</pre><p>Support: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></p><button onClick={() => location.reload()}>Reload</button></div>;
 
   const isDemo = !session;
   const countryLabel = (workspace?.country || "US") === "CA" ? "🇨🇦 Canada" : "🇺🇸 United States";
+  const displayUser = session?.user?.user_metadata?.first_name || session?.user?.email?.split('@')[0] || 'Account';
   return <div className="app-frame">
     {isDemo && <div className="demo-banner"><b>Anyone can explore the demo, but only signed-in users get a private workspace.</b><span>Sample data only.</span><button className="primary" onClick={() => setAuthView("signup")}>Create Account</button><button onClick={() => setAuthView("signin")}>Sign In</button></div>}
     <div className="shell">
-      <aside>
+      {mobileMenuOpen && <div className="nav-scrim" onClick={()=>setMobileMenuOpen(false)}/>} 
+      <aside className={mobileMenuOpen?'mobile-open':''}>
         <div className="brand"><div className="mark"><img src={qentroLogo} alt="Qentro" /></div><div><strong>Qentro Finance</strong><span>{isDemo ? "Interactive demo" : "Private workspace"}</span></div></div>
-        <nav>{nav.map((n) => <button key={n} className={page === n ? "active" : ""} onClick={() => setPage(n)}>{n}</button>)}</nav>
+        <nav>{nav.map((n) => <button key={n} className={page === n ? "active" : ""} onClick={() => choosePage(n)}>{n}</button>)}</nav>
         <div className="privacy"><span>{isDemo ? "Demo data stored in this browser" : "Private cloud workspace"}</span><span>Support: {SUPPORT_EMAIL}</span><span>Version {packageInfo.version}</span></div>
       </aside>
       <main>
-        <header><div><h1>{page}</h1><p>{isDemo ? "Explore all functions with sample data" : "Your private business finance workspace"}</p></div><div className="header-actions"><button className="country-badge" title="Country is set when the workspace is created">{countryLabel}</button>{!isDemo && <button onClick={handleSignOut}>Sign Out</button>}</div></header>
+        <header><div className="header-title"><button className="hamburger" aria-label="Open navigation" onClick={()=>setMobileMenuOpen(true)}>☰</button><div><h1>{page}</h1><p>{isDemo ? "Explore all functions with sample data" : "Your private business finance workspace"}</p></div></div><div className="header-actions"><button className="country-badge" title="Country is set when the workspace is created">{countryLabel}</button>{!isDemo && <div className="user-menu-wrap"><button className="user-menu-button" onClick={()=>setUserMenuOpen(v=>!v)}>{displayUser} ▾</button>{userMenuOpen&&<div className="user-menu"><button onClick={()=>{setAuthView('change-password');setUserMenuOpen(false)}}>Change Password</button><button onClick={()=>choosePage('Settings')}>Settings</button><button onClick={handleSignOut}>Sign Out</button></div>}</div>}</div></header>
         {isDemo ? <Page page={page} setPage={setPage} isDemo={true} /> : <PrivateWorkspace page={page} setPage={setPage} workspace={workspace} session={session} />}
       </main>
     </div>
@@ -140,35 +150,34 @@ function App() {
 }
 
 function AuthModal({ view, onClose, onSwitch, onSignedIn }) {
-  const signup = view === "signup";
-  const [form, setForm] = useState({ firstName:"", lastName:"", companyName:"", email:"", password:"", country:"US", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", challengeId:"", challengeAnswer:"", website:"" });
+  const signup = view === "signup", signin=view==='signin', forgot=view==='forgot', reset=view==='reset', changing=view==='change-password';
+  const [form, setForm] = useState({ firstName:"", lastName:"", companyName:"", email:"", password:"", newPassword:"", confirmPassword:"", country:"US", challengeId:"", challengeAnswer:"", website:"", timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC' });
   const [question, setQuestion] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  async function refreshChallenge() {
-    if (!supabaseConfigured) { setQuestion("Supabase setup required before account creation."); return; }
-    try { const c = await getCaptchaChallenge(); setQuestion(c.question); setForm((f) => ({ ...f, challengeId:c.challenge_id, challengeAnswer:"" })); } catch (e) { setMessage(String(e)); }
-  }
+  async function refreshChallenge() { if (!supabaseConfigured) { setQuestion("Supabase setup required before account creation."); return; } try { const c = await getCaptchaChallenge(); setQuestion(c.question); setForm((f) => ({ ...f, challengeId:c.challenge_id, challengeAnswer:"" })); } catch (e) { setMessage(String(e)); } }
   useEffect(() => { if (signup) void refreshChallenge(); }, [signup]);
   async function submit(e) {
     e.preventDefault(); setBusy(true); setMessage("");
     try {
+      if(forgot){await sendPasswordReset(form.email);setMessage('Password reset email sent. Check your inbox and spam folder.');return;}
+      if(reset||changing){if(form.newPassword.length<8)throw new Error('Password must be at least 8 characters.');if(form.newPassword!==form.confirmPassword)throw new Error('Passwords do not match.');await changePassword(form.newPassword);setMessage('Password updated successfully.');setTimeout(()=>onClose(),700);return;}
       if (signup) { await createWorkspaceAccount(form); await signIn(form.email, form.password); }
       else await signIn(form.email, form.password);
       await onSignedIn();
     } catch (err) { setMessage(String(err)); if (signup) await refreshChallenge(); }
     finally { setBusy(false); }
   }
-  return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><div className="auth-card">
-    <button className="modal-close" onClick={onClose}>×</button><h2>{signup ? "Create your private workspace" : "Sign in"}</h2>
-    <p className="muted">{signup ? "Your company receives its own private workspace. Other customers cannot see your finance data." : "Open your existing private finance workspace."}</p>
-    {!supabaseConfigured && <div className="notice">Account services are not configured yet. Follow SETUP-SUPABASE.md after uploading this package.</div>}
+  let title=signup?'Create your private workspace':signin?'Sign in':forgot?'Reset your password':reset?'Choose a new password':'Change Password';
+  return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !reset) onClose(); }}><div className="auth-card">
+    {!reset&&<button className="modal-close" onClick={onClose}>×</button>}<h2>{title}</h2>
+    <p className="muted">{signup?'Your company receives its own private workspace. Other customers cannot see your finance data.':forgot?'Enter your email and we will send a secure password reset link.':reset||changing?'Use at least 8 characters.':'Open your existing private finance workspace.'}</p>
     <Status message={message}/><form className="form" onSubmit={submit}><input className="signup-honeypot" tabIndex="-1" autoComplete="off" aria-hidden="true" value={form.website||""} onChange={(e)=>setForm({...form,website:e.target.value})}/>
-      {signup && <><div className="two-col"><Field label="First name" value={form.firstName} onChange={(v) => setForm({...form,firstName:v})}/><Field label="Last name" value={form.lastName} onChange={(v) => setForm({...form,lastName:v})}/></div><Field label="Company name" value={form.companyName} onChange={(v) => setForm({...form,companyName:v})}/></>}
-      <Field label="Email" type="email" value={form.email} onChange={(v) => setForm({...form,email:v})}/><Field label="Password" type="password" value={form.password} onChange={(v) => setForm({...form,password:v})}/>
-      {signup && <><Select label="Country" value={form.country} onChange={(v) => setForm({...form,country:v})} options={[["US","United States"],["CA","Canada"]]}/><div className="captcha-box"><b>Human verification</b><p>{question || "Loading challenge…"}</p><Field label="Answer" value={form.challengeAnswer} onChange={(v) => setForm({...form,challengeAnswer:v})}/><button type="button" onClick={refreshChallenge}>New question</button></div></>}
-      <button className="primary" disabled={busy || !supabaseConfigured}>{busy ? "Working…" : signup ? "Create Account" : "Sign In"}</button>
-    </form><p className="auth-switch">{signup ? <>Already have an account? <button onClick={() => onSwitch("signin")}>Sign in</button></> : <>New here? <button onClick={() => onSwitch("signup")}>Create an account</button></>}</p><small>Support: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></small>
+      {signup&&<><div className="two-col"><Field label="First name" value={form.firstName} onChange={(v)=>setForm({...form,firstName:v})}/><Field label="Last name" value={form.lastName} onChange={(v)=>setForm({...form,lastName:v})}/></div><Field label="Company name" value={form.companyName} onChange={(v)=>setForm({...form,companyName:v})}/></>}
+      {(signin||signup||forgot)&&<Field label="Email" type="email" value={form.email} onChange={(v)=>setForm({...form,email:v})}/>} {(signin||signup)&&<Field label="Password" type="password" value={form.password} onChange={(v)=>setForm({...form,password:v})}/>} {(reset||changing)&&<><Field label="New Password" type="password" value={form.newPassword} onChange={(v)=>setForm({...form,newPassword:v})}/><Field label="Confirm New Password" type="password" value={form.confirmPassword} onChange={(v)=>setForm({...form,confirmPassword:v})}/></>}
+      {signup&&<><Select label="Country" value={form.country} onChange={(v)=>setForm({...form,country:v})} options={[["US","United States"],["CA","Canada"]]}/><div className="captcha-box"><b>Human verification</b><p>{question || "Loading challenge…"}</p><Field label="Answer" value={form.challengeAnswer} onChange={(v)=>setForm({...form,challengeAnswer:v})}/><button type="button" onClick={refreshChallenge}>New question</button></div></>}
+      <button className="primary" disabled={busy || (!supabaseConfigured&&!reset&&!changing)}>{busy?'Working…':signup?'Create Account':signin?'Sign In':forgot?'Send Reset Link':'Update Password'}</button>
+    </form>{signin&&<p className="auth-forgot"><button onClick={()=>onSwitch('forgot')}>Forgot password?</button></p>}<p className="auth-switch">{signup?<>Already have an account? <button onClick={()=>onSwitch('signin')}>Sign in</button></>:signin?<>New here? <button onClick={()=>onSwitch('signup')}>Create an account</button></>:forgot?<>Remembered your password? <button onClick={()=>onSwitch('signin')}>Back to sign in</button></>:null}</p><small>Support: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></small>
   </div></div>;
 }
 
@@ -619,6 +628,7 @@ function Expenses() {
       <div className="panel expense-import-panel">
         <div className="panel-title-row"><div><h3>Expense import</h3><p className="muted">Choose one way to add records. Each form opens only when you need it.</p></div></div>
         <div className="button-row expense-import-actions">
+          <button type="button" className="primary" onClick={()=>setMessage("Receipt OCR is available in a signed-in private workspace. Sign in to scan a real receipt; the public demo never uploads your files.")}>📷 Scan Receipt</button>
           <button type="button" onClick={downloadTemplate} disabled={busy}>Download Excel Template</button>
           <button type="button" onClick={importExcel} disabled={busy}>Import Excel</button>
           <button type="button" className={activeImport==="bank"?"primary":""} onClick={()=>{setActiveImport(activeImport==="bank"?"":"bank");setManualOpen(false);}}>Import Bank CSV</button>
@@ -1368,6 +1378,7 @@ function Reports() {
   const [periodMode,setPeriodMode]=useState("ytd");
   const [month, setMonth] = useState(monthKey());
   const [year,setYear]=useState(currentYear);
+  const [quarter,setQuarter]=useState(String(Math.floor(new Date().getMonth()/3)+1));
   const [tab, setTab] = useState("Income Statement");
   const [income, setIncome] = useState(null);
   const [balance, setBalance] = useState(null);
@@ -1387,12 +1398,14 @@ function Reports() {
     notes: ""
   });
 
-  const period=periodMode==="month"?{mode:"month",value:month}:periodMode==="year"?{mode:"year",value:year}:{mode:"ytd"};
+  const period=periodMode==="month"?{mode:"month",value:month}:periodMode==="quarter"?{mode:"quarter",value:{year,quarter}}:periodMode==="year"?{mode:"year",value:year}:{mode:"ytd"};
   const formatDate=(value)=>new Intl.DateTimeFormat("en-US",{month:"long",day:"numeric",year:"numeric",timeZone:"UTC"}).format(new Date(`${value}T00:00:00Z`));
   const monthName=new Intl.DateTimeFormat("en-US",{month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(`${month}-01T00:00:00Z`));
-  const periodLabel=periodMode==="month"?`For ${monthName}`:periodMode==="year"?`For the year ended December 31, ${year}`:`Year to date through ${formatDate(today())}`;
-  const asOfLabel=periodMode==="month"?`As of ${formatDate(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).toISOString().slice(0,10))}`:periodMode==="year"?`As of December 31, ${year}`:`As of ${formatDate(today())}`;
-  const periodFileKey=periodMode==="month"?month:periodMode==="year"?year:`YTD_${today()}`;
+  const quarterStartMonth=(Number(quarter)-1)*3+1;
+  const quarterEndDate=new Date(Date.UTC(Number(year),quarterStartMonth+2,0)).toISOString().slice(0,10);
+  const periodLabel=periodMode==="month"?`For ${monthName}`:periodMode==="quarter"?`For Q${quarter} ${year}`:periodMode==="year"?`For the year ended December 31, ${year}`:`Year to date through ${formatDate(today())}`;
+  const asOfLabel=periodMode==="month"?`As of ${formatDate(new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).toISOString().slice(0,10))}`:periodMode==="quarter"?`As of ${formatDate(quarterEndDate)}`:periodMode==="year"?`As of December 31, ${year}`:`As of ${formatDate(today())}`;
+  const periodFileKey=periodMode==="month"?month:periodMode==="quarter"?`${year}_Q${quarter}`:periodMode==="year"?year:`YTD_${today()}`;
 
   async function load() {
     try {
@@ -1417,7 +1430,7 @@ function Reports() {
     }
   }
 
-  useEffect(() => { void load(); }, [periodMode,month,year]);
+  useEffect(() => { void load(); }, [periodMode,month,year,quarter]);
 
   function reportFileStem() {
     return tab.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -1560,8 +1573,9 @@ function Reports() {
   return (
     <section>
       <div className="toolbar report-toolbar">
-        <Select label="Report period" value={periodMode} onChange={setPeriodMode} options={[["ytd","Year to Date"],["month","Monthly"],["year","Full Year"]]}/>
+        <Select label="Report period" value={periodMode} onChange={setPeriodMode} options={[["ytd","Year to Date"],["month","Monthly"],["quarter","Quarterly"],["year","Full Year"]]}/>
         {periodMode==="month"?<label className="field"><span>Month</span><input type="month" value={month} onChange={(e)=>setMonth(e.target.value)}/></label>:null}
+        {periodMode==="quarter"?<><Field label="Year" type="number" min="1900" value={year} onChange={setYear}/><Select label="Quarter" value={quarter} onChange={setQuarter} options={[["1","Q1"],["2","Q2"],["3","Q3"],["4","Q4"]]}/></>:null}
         {periodMode==="year"?<Field label="Year" type="number" min="1900" value={year} onChange={setYear}/>:null}
         <button className="primary" onClick={exportPdf}>Generate PDF</button>
         <button onClick={exportExcel}>Export Excel</button>
@@ -1571,7 +1585,7 @@ function Reports() {
 
       <div className="report-tabs">
         {["Income Statement", "Balance Sheet", "Cash Flow Statement", "General Ledger"].map((name) => (
-          <button key={name} className={tab === name ? "active" : ""} onClick={() => setTab(name)}>{name}</button>
+          <button key={name} className={tab === name ? "active" : ""} onClick={(e) => { setTab(name); requestAnimationFrame(() => e.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })); }}>{name}</button>
         ))}
       </div>
 

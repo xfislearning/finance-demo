@@ -1,176 +1,58 @@
-import { restSelect, restInsert, restUpdate, restDelete } from './supabaseClient';
+import { restSelect, restInsert, restUpdate, restDelete, invokeAuthedFunction, uploadStorageObject } from './supabaseClient';
 
 const q = encodeURIComponent;
 const now = () => new Date().toISOString();
+const first = (v) => Array.isArray(v) ? v[0] : v;
 
-export async function listExpenseCategories() {
-  return restSelect('categories?select=id,name,sort_order,is_system,organization_id&category_type=eq.expense&is_active=eq.true&order=sort_order.asc,name.asc');
-}
+export async function listExpenseCategories() { return restSelect('categories?select=id,name,sort_order,is_system,organization_id&category_type=eq.expense&is_active=eq.true&order=sort_order.asc,name.asc'); }
+export async function listRevenueCategories() { return restSelect('categories?select=id,name,sort_order,is_system,organization_id&category_type=eq.revenue&is_active=eq.true&order=sort_order.asc,name.asc'); }
 
-export async function listRevenueCategories() {
-  return restSelect('categories?select=id,name,sort_order,is_system,organization_id&category_type=eq.revenue&is_active=eq.true&order=sort_order.asc,name.asc');
-}
+export async function listCloudAccounts(includeInactive=false) { return restSelect(`accounts?select=*&${includeInactive?'':'is_active=eq.true&'}order=created_at.asc`); }
+export async function createCloudAccount(orgId,data){return restInsert('accounts',{organization_id:orgId,nickname:data.nickname?.trim()||null,account_type:data.account_type,used_for:data.used_for,institution_name:data.institution_name?.trim()||null,last_four:data.last_four?.trim()||null,currency:data.currency||'USD',is_active:true,updated_at:now()});}
+export async function updateCloudAccount(id,data){return restUpdate('accounts',`id=eq.${q(id)}`,{nickname:data.nickname?.trim()||null,account_type:data.account_type,used_for:data.used_for,institution_name:data.institution_name?.trim()||null,last_four:data.last_four?.trim()||null,currency:data.currency||'USD',is_active:data.is_active!==false,updated_at:now()});}
+export async function setCloudAccountActive(id,isActive){return restUpdate('accounts',`id=eq.${q(id)}`,{is_active:!!isActive,updated_at:now()});}
 
-export async function listCloudAccounts() {
-  return restSelect('accounts?select=*&is_active=eq.true&order=created_at.asc');
-}
+export async function listCloudExpenses(){return restSelect('expenses?select=*,categories(name),accounts(nickname,account_type,institution_name,last_four,used_for)&order=expense_date.desc,created_at.desc');}
+export async function createCloudExpense(orgId,userId,data){const subtotal=Number(data.subtotal||0),tax=Number(data.tax_amount||0),tip=Number(data.tip_amount||0),total=Number(data.total_amount||subtotal+tax+tip);return restInsert('expenses',{organization_id:orgId,account_id:data.account_id||null,expense_date:data.expense_date,vendor:data.vendor?.trim()||null,description:data.description?.trim()||null,category_id:data.category_id||null,customer_project:data.customer_project?.trim()||null,subtotal,tax_amount:tax,tip_amount:tip,total_amount:total,currency:data.currency||'USD',source:data.source||'manual',status:data.status||'approved',receipt_path:data.receipt_path||null,reconciled:false,created_by:userId||null,updated_at:now()});}
+export async function updateCloudExpense(id,data){const subtotal=Number(data.subtotal||0),tax=Number(data.tax_amount||0),tip=Number(data.tip_amount||0),total=Number(data.total_amount||subtotal+tax+tip);return restUpdate('expenses',`id=eq.${q(id)}`,{expense_date:data.expense_date,vendor:data.vendor?.trim()||null,description:data.description?.trim()||null,category_id:data.category_id||null,account_id:data.account_id||null,customer_project:data.customer_project?.trim()||null,subtotal,tax_amount:tax,tip_amount:tip,total_amount:total,receipt_path:data.receipt_path||null,updated_at:now()});}
+export async function deleteCloudExpense(id){return restDelete('expenses',`id=eq.${q(id)}`);}
+export async function uploadReceipt(orgId,file){const safe=(file.name||'receipt.jpg').replace(/[^A-Za-z0-9._-]/g,'_');const path=`${orgId}/${Date.now()}-${safe}`;await uploadStorageObject('receipts',path,file);return path;}
+export async function scanReceipt(dataUrl){return invokeAuthedFunction('receipt-scan',{image_data_url:dataUrl});}
 
-export async function createCloudAccount(orgId, data) {
-  return restInsert('accounts', {
-    organization_id: orgId,
-    nickname: data.nickname?.trim() || null,
-    account_type: data.account_type,
-    used_for: data.used_for,
-    institution_name: data.institution_name?.trim() || null,
-    last_four: data.last_four?.trim() || null,
-    currency: data.currency || 'USD',
-    is_active: true,
-    updated_at: now()
-  });
-}
+export async function listCloudClients(){return restSelect('clients?select=*&order=name.asc,created_at.desc');}
+export async function createCloudClient(orgId,data){return restInsert('clients',{organization_id:orgId,name:data.name.trim(),contact_name:data.contact_name?.trim()||null,email:data.email?.trim()||null,phone:data.phone?.trim()||null,billing_address:data.billing_address?.trim()||null,notes:data.notes?.trim()||null,is_active:true,updated_at:now()});}
+export async function updateCloudClient(id,data){return restUpdate('clients',`id=eq.${q(id)}`,{name:data.name.trim(),contact_name:data.contact_name?.trim()||null,email:data.email?.trim()||null,phone:data.phone?.trim()||null,billing_address:data.billing_address?.trim()||null,notes:data.notes?.trim()||null,updated_at:now()});}
+export async function deleteCloudClient(id){return restDelete('clients',`id=eq.${q(id)}`);}
 
-export async function listCloudExpenses() {
-  return restSelect('expenses?select=*,categories(name),accounts(nickname,account_type,institution_name,last_four,used_for)&order=expense_date.desc,created_at.desc');
-}
+export async function listMileageRates(){return restSelect('mileage_rates?select=*&order=effective_from.desc');}
+export async function createMileageRate(orgId,data){return restInsert('mileage_rates',{organization_id:orgId,effective_from:data.effective_from,effective_to:data.effective_to||null,rate_per_mile:Number(data.rate_per_mile||0),label:data.label?.trim()||null,updated_at:now()});}
+export async function updateMileageRate(id,data){return restUpdate('mileage_rates',`id=eq.${q(id)}`,{effective_from:data.effective_from,effective_to:data.effective_to||null,rate_per_mile:Number(data.rate_per_mile||0),label:data.label?.trim()||null,updated_at:now()});}
+export async function deleteMileageRate(id){return restDelete('mileage_rates',`id=eq.${q(id)}`);}
+export async function mileageRateForDate(date){const rows=await restSelect(`mileage_rates?select=*&effective_from=lte.${q(date)}&or=(effective_to.is.null,effective_to.gte.${q(date)})&order=effective_from.desc&limit=1`);return Number(rows?.[0]?.rate_per_mile||0);}
+export async function listCloudMileage(){return restSelect('mileage?select=*&order=trip_date.desc,created_at.desc');}
+export async function createCloudMileage(orgId,userId,data){const miles=Number(data.miles||0),rate=Number(data.rate_per_mile||0);return restInsert('mileage',{organization_id:orgId,trip_date:data.trip_date,start_location:data.start_location?.trim()||null,end_location:data.end_location?.trim()||null,round_trip:!!data.round_trip,purpose:data.purpose?.trim()||null,customer_project:data.customer_project?.trim()||null,start_odometer:data.start_odometer===''?null:Number(data.start_odometer),end_odometer:data.end_odometer===''?null:Number(data.end_odometer),miles,rate_per_mile:rate,deduction_amount:miles*rate,notes:data.notes?.trim()||null,created_by:userId||null,updated_at:now()});}
+export async function updateCloudMileage(id,data){const miles=Number(data.miles||0),rate=Number(data.rate_per_mile||0);return restUpdate('mileage',`id=eq.${q(id)}`,{trip_date:data.trip_date,start_location:data.start_location?.trim()||null,end_location:data.end_location?.trim()||null,round_trip:!!data.round_trip,purpose:data.purpose?.trim()||null,customer_project:data.customer_project?.trim()||null,start_odometer:data.start_odometer===''?null:Number(data.start_odometer),end_odometer:data.end_odometer===''?null:Number(data.end_odometer),miles,rate_per_mile:rate,deduction_amount:miles*rate,notes:data.notes?.trim()||null,updated_at:now()});}
+export async function deleteCloudMileage(id){return restDelete('mileage',`id=eq.${q(id)}`);}
 
-export async function createCloudExpense(orgId, userId, data) {
-  const subtotal = Number(data.subtotal || 0);
-  const tax = Number(data.tax_amount || 0);
-  const tip = Number(data.tip_amount || 0);
-  const total = Number(data.total_amount || subtotal + tax + tip);
-  return restInsert('expenses', {
-    organization_id: orgId,
-    account_id: data.account_id || null,
-    expense_date: data.expense_date,
-    vendor: data.vendor?.trim() || null,
-    description: data.description?.trim() || null,
-    category_id: data.category_id || null,
-    customer_project: data.customer_project?.trim() || null,
-    subtotal,
-    tax_amount: tax,
-    tip_amount: tip,
-    total_amount: total,
-    currency: data.currency || 'USD',
-    source: data.source || 'manual',
-    status: data.status || 'approved',
-    receipt_path: data.receipt_path || null,
-    reconciled: false,
-    created_by: userId || null,
-    updated_at: now()
-  });
-}
+export async function listCloudBankTransactions(){return restSelect('bank_transactions?select=*,accounts(nickname,account_type,institution_name,last_four)&order=transaction_date.desc,created_at.desc');}
+export async function createCloudBankTransactions(orgId,accountId,rows,fileName='csv'){const payload=rows.map((r,i)=>({organization_id:orgId,account_id:accountId,transaction_date:r.transaction_date,description:r.description||null,merchant:r.merchant||r.description||null,amount:Number(r.amount),transaction_type:Number(r.amount)<0?'expense':'income',import_source:fileName,external_transaction_id:r.external_transaction_id||`${fileName}-${i}-${r.transaction_date}-${Number(r.amount).toFixed(2)}`,reconciliation_status:'unmatched',updated_at:now()}));return restInsert('bank_transactions',payload);}
+export async function listCloudReconciliations(){return restSelect('reconciliations?select=*,bank_transactions(transaction_date,merchant,description,amount,reconciliation_status),expenses(expense_date,vendor,total_amount,reconciled),revenue(revenue_date,customer,total_received,reconciled)&order=created_at.desc');}
+export async function createCandidateMatch(orgId,bankId,expenseId,confidence=1){return restInsert('reconciliations',{organization_id:orgId,bank_transaction_id:bankId,expense_id:expenseId,revenue_id:null,match_confidence:confidence,match_status:'ready_for_review'});}
+export async function approveCandidateMatch(reconciliation,userId){const stamp=now();await restUpdate('reconciliations',`id=eq.${q(reconciliation.id)}`,{match_status:'approved',approved_by:userId,approved_at:stamp});await restUpdate('bank_transactions',`id=eq.${q(reconciliation.bank_transaction_id)}`,{reconciliation_status:'matched',updated_at:stamp});if(reconciliation.expense_id)await restUpdate('expenses',`id=eq.${q(reconciliation.expense_id)}`,{reconciled:true,reconciled_at:stamp,updated_at:stamp});if(reconciliation.revenue_id)await restUpdate('revenue',`id=eq.${q(reconciliation.revenue_id)}`,{reconciled:true,reconciled_at:stamp,updated_at:stamp});}
 
-export async function updateCloudExpense(id, data) {
-  const subtotal = Number(data.subtotal || 0);
-  const tax = Number(data.tax_amount || 0);
-  const tip = Number(data.tip_amount || 0);
-  const total = Number(data.total_amount || subtotal + tax + tip);
-  return restUpdate('expenses', `id=eq.${q(id)}`, {
-    expense_date: data.expense_date,
-    vendor: data.vendor?.trim() || null,
-    description: data.description?.trim() || null,
-    category_id: data.category_id || null,
-    account_id: data.account_id || null,
-    customer_project: data.customer_project?.trim() || null,
-    subtotal, tax_amount: tax, tip_amount: tip, total_amount: total,
-    updated_at: now()
-  });
-}
+export async function listCloudRevenue(){return restSelect('revenue?select=*,categories(name),accounts(nickname,account_type,institution_name,last_four)&order=revenue_date.desc,created_at.desc');}
+export async function createCloudRevenue(orgId,userId,data){const base=Number(data.revenue_amount||0),tax=Number(data.tax_collected||0);return restInsert('revenue',{organization_id:orgId,account_id:data.account_id||null,revenue_date:data.revenue_date,customer:data.customer?.trim()||null,description:data.description?.trim()||null,category_id:data.category_id||null,revenue_amount:base,tax_collected:tax,total_received:Number(data.total_received||base+tax),currency:data.currency||'USD',source:data.source||'manual',status:data.status||'approved',reconciled:false,created_by:userId||null,updated_at:now()});}
 
-export async function deleteCloudExpense(id) {
-  return restDelete('expenses', `id=eq.${q(id)}`);
-}
+export async function listCloudInvoices(){return restSelect('invoices?select=*,clients(name,email,billing_address)&order=invoice_date.desc,created_at.desc');}
+export async function getCloudInvoice(id){const inv=first(await restSelect(`invoices?select=*,clients(name,email,billing_address)&id=eq.${q(id)}&limit=1`));if(!inv)return null;inv.items=await restSelect(`invoice_items?select=*&invoice_id=eq.${q(id)}&order=sort_order.asc`);inv.payments=await restSelect(`invoice_payments?select=*&invoice_id=eq.${q(id)}&order=payment_date.asc`);return inv;}
+export async function createCloudInvoice(orgId,userId,data,items){const subtotal=items.reduce((s,x)=>s+Number(x.quantity||0)*Number(x.rate||0),0),taxRate=Number(data.tax_rate||0),tax=subtotal*taxRate/100,total=subtotal+tax;const result=first(await restInsert('invoices',{organization_id:orgId,client_id:data.client_id||null,invoice_number:data.invoice_number,invoice_date:data.invoice_date,due_date:data.due_date||null,status:'sent',subtotal,tax_rate:taxRate,tax_amount:tax,total_amount:total,currency:data.currency||'USD',notes:data.notes||null,payment_instructions:data.payment_instructions||null,created_by:userId||null,updated_at:now()}));if(result?.id){await restInsert('invoice_items',items.map((x,i)=>({organization_id:orgId,invoice_id:result.id,description:x.description,quantity:Number(x.quantity||1),rate:Number(x.rate||0),amount:Number(x.quantity||1)*Number(x.rate||0),sort_order:i})));}return result;}
+export async function recordInvoicePayment(orgId,invoiceId,data){await restInsert('invoice_payments',{organization_id:orgId,invoice_id:invoiceId,payment_date:data.payment_date,amount:Number(data.amount||0),account_id:data.account_id||null,reference:data.reference||null});const payments=await restSelect(`invoice_payments?select=amount&invoice_id=eq.${q(invoiceId)}`);const inv=first(await restSelect(`invoices?select=total_amount&id=eq.${q(invoiceId)}&limit=1`));const paid=payments.reduce((s,p)=>s+Number(p.amount||0),0);return restUpdate('invoices',`id=eq.${q(invoiceId)}`,{status:paid+0.005>=Number(inv?.total_amount||0)?'paid':'partially_paid',updated_at:now()});}
+export async function nextCloudInvoiceNumber(prefix='INV-'){const rows=await restSelect('invoices?select=invoice_number&order=created_at.desc&limit=100');let max=0;for(const r of rows){const m=String(r.invoice_number||'').match(/(\d+)$/);if(m)max=Math.max(max,Number(m[1]));}return `${prefix}${String(max+1).padStart(4,'0')}`;}
 
-export async function listCloudClients() {
-  return restSelect('clients?select=*&order=created_at.desc');
-}
-export async function createCloudClient(orgId, data) {
-  return restInsert('clients', {
-    organization_id: orgId,
-    name: data.name.trim(),
-    contact_name: data.contact_name?.trim() || null,
-    email: data.email?.trim() || null,
-    phone: data.phone?.trim() || null,
-    billing_address: data.billing_address?.trim() || null,
-    notes: data.notes?.trim() || null,
-    is_active: true,
-    updated_at: now()
-  });
-}
+export async function listAccountingEntries(){return restSelect('accounting_entries?select=*,accounts(nickname,institution_name,account_type)&order=entry_date.desc,created_at.desc');}
+export async function createAccountingEntry(orgId,userId,data){return restInsert('accounting_entries',{organization_id:orgId,entry_date:data.entry_date,entry_type:data.entry_type,description:data.description,amount:Number(data.amount||0),account_id:data.account_id||null,reference_name:data.reference_name||null,notes:data.notes||null,created_by:userId||null,updated_at:now()});}
+export async function deleteAccountingEntry(id){return restDelete('accounting_entries',`id=eq.${q(id)}`);}
 
-export async function listCloudMileage() {
-  return restSelect('mileage?select=*&order=trip_date.desc,created_at.desc');
-}
-export async function createCloudMileage(orgId, userId, data) {
-  const miles = Number(data.miles || 0);
-  const rate = Number(data.rate_per_mile || 0);
-  return restInsert('mileage', {
-    organization_id: orgId,
-    trip_date: data.trip_date,
-    start_location: data.start_location?.trim() || null,
-    end_location: data.end_location?.trim() || null,
-    round_trip: !!data.round_trip,
-    purpose: data.purpose?.trim() || null,
-    customer_project: data.customer_project?.trim() || null,
-    start_odometer: data.start_odometer === '' ? null : Number(data.start_odometer),
-    end_odometer: data.end_odometer === '' ? null : Number(data.end_odometer),
-    miles,
-    rate_per_mile: rate,
-    deduction_amount: miles * rate,
-    notes: data.notes?.trim() || null,
-    created_by: userId || null,
-    updated_at: now()
-  });
-}
-
-export async function listCloudBankTransactions() {
-  return restSelect('bank_transactions?select=*,accounts(nickname,account_type,institution_name,last_four)&order=transaction_date.desc,created_at.desc');
-}
-export async function listCloudReconciliations() {
-  return restSelect('reconciliations?select=*,bank_transactions(transaction_date,merchant,description,amount,reconciliation_status),expenses(expense_date,vendor,total_amount,reconciled)&order=created_at.desc');
-}
-
-export async function createCandidateMatch(orgId, bankId, expenseId, confidence = 1) {
-  return restInsert('reconciliations', {
-    organization_id: orgId,
-    bank_transaction_id: bankId,
-    expense_id: expenseId,
-    revenue_id: null,
-    match_confidence: confidence,
-    match_status: 'ready_for_review'
-  });
-}
-
-export async function approveCandidateMatch(reconciliation, userId) {
-  const stamp = now();
-  await restUpdate('reconciliations', `id=eq.${q(reconciliation.id)}`, {
-    match_status: 'approved', approved_by: userId, approved_at: stamp
-  });
-  await restUpdate('bank_transactions', `id=eq.${q(reconciliation.bank_transaction_id)}`, {
-    reconciliation_status: 'matched', updated_at: stamp
-  });
-  if (reconciliation.expense_id) {
-    await restUpdate('expenses', `id=eq.${q(reconciliation.expense_id)}`, {
-      reconciled: true, reconciled_at: stamp, updated_at: stamp
-    });
-  }
-}
-
-export async function listCloudRevenue() {
-  return restSelect('revenue?select=*,categories(name),accounts(nickname,account_type,institution_name,last_four)&order=revenue_date.desc,created_at.desc');
-}
-
-export async function listCloudInvoices() {
-  return restSelect('invoices?select=*&order=invoice_date.desc,created_at.desc');
-}
-
-export async function updateOrganization(orgId, values) {
-  return restUpdate('organizations', `id=eq.${q(orgId)}`, values);
-}
-
-export async function recordActivity(orgId, userId, activityType='app_use') {
-  try {
-    await restInsert('user_activity', { organization_id: orgId, user_id: userId, activity_type: activityType, occurred_at: now() });
-    await restUpdate('user_profiles', `user_id=eq.${q(userId)}`, { last_active_at: now() });
-  } catch { /* activity tracking must never block finance work */ }
-}
+export async function getOrganization(orgId){return first(await restSelect(`organizations?select=*&id=eq.${q(orgId)}&limit=1`));}
+export async function updateOrganization(orgId,values){return restUpdate('organizations',`id=eq.${q(orgId)}`,{...values,updated_at:now()});}
+export async function recordActivity(orgId,userId,activityType='app_use'){try{await restInsert('user_activity',{organization_id:orgId,user_id:userId,activity_type:activityType,occurred_at:now()});await restUpdate('user_profiles',`user_id=eq.${q(userId)}`,{last_active_at:now()});}catch{/* never block finance work */}}
